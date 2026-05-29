@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TikTok Live: Dynamic Pushing Battle</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body { background-color: #0d0e15; color: #ffffff; font-family: 'Segoe UI', Roboto, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
+        
+        .scoreboard { display: flex; gap: 40px; margin-bottom: 10px; z-index: 10; }
+        .win-box { background: rgba(255, 255, 255, 0.05); padding: 10px 25px; border-radius: 15px; text-align: center; font-weight: bold; font-size: 1.2rem; border: 2px solid transparent; }
+        .win-left { border-color: #00f2fe; box-shadow: 0 0 15px rgba(0, 242, 254, 0.2); color: #00f2fe; }
+        .win-right { border-color: #ff758c; box-shadow: 0 0 15px rgba(255, 117, 140, 0.2); color: #ff758c; }
+        .win-counter { font-size: 2rem; font-weight: 900; margin-top: 5px; color: white; }
+
+        .battle-arena { display: flex; width: 90%; max-width: 1100px; height: 480px; border-radius: 30px; overflow: hidden; position: relative; box-shadow: 0 20px 50px rgba(0,0,0,0.6); border: 4px solid #1a1c29; }
+        .team-side { display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 30px; transition: flex 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: relative; }
+        .side-left { background: linear-gradient(135deg, #0f2027, #203a43, #2c5364); align-items: flex-start; }
+        .side-right { background: linear-gradient(135deg, #3a1c1c, #6b2d5c, #89216b); align-items: flex-end; }
+        .team-title { font-size: 2rem; font-weight: 900; text-transform: uppercase; letter-spacing: 2px; }
+        .side-left .team-title { color: #00f2fe; }
+        .side-right .team-title { color: #ff758c; }
+        .score-display { font-size: 4.5rem; font-weight: 900; text-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+
+        /* แกนกลางและระบบเอฟเฟกต์แสง */
+        .push-center-axis { position: absolute; top: 0; bottom: 0; width: 8px; background: #ffffff; box-shadow: 0 0 20px #ffffff; z-index: 5; transition: left 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); display: flex; justify-content: center; align-items: center; }
+        .character-container { position: absolute; display: flex; align-items: center; width: 360px; justify-content: space-between; pointer-events: none; }
+        
+        .cartoon-char { width: 140px; height: 140px; object-fit: contain; transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1); transform-origin: bottom center; }
+        
+        /* ✨ 1. อนิเมชันตัวละครขยับตลอดเวลา (Idle Breathe) */
+        @keyframes idleBreatheLeft {
+            0%, 100% { transform: scale(1) translateY(0); rotate: 0deg; }
+            50% { transform: scale(1.03) translateY(-4px); rotate: 1deg; }
+        }
+        @keyframes idleBreatheRight {
+            0%, 100% { transform: scaleX(-1) scale(1) translateY(0); rotate: 0deg; }
+            50% { transform: scaleX(-1) scale(1.03) translateY(-4px); rotate: -1deg; }
+        }
+        
+        .char-left { filter: drop-shadow(0 0 10px #00f2fe); animation: idleBreatheLeft 2.5s infinite ease-in-out; }
+        .char-right { filter: drop-shadow(0 0 10px #ff758c); animation: idleBreatheRight 2.5s infinite ease-in-out; }
+
+        /* ✨ 2. คลาสท่าทางเวลาเกิดการดันกระแทก (Push & Impact) */
+        .char-push-action { animation: none !important; transform: scale(1.1) translateX(15px) rotate(8deg) !important; }
+        .char-receive-impact { animation: none !important; transform: scaleX(-1) scale(0.95) translateX(15px) rotate(5deg) !important; }
+        
+        .char-push-action-right { animation: none !important; transform: scaleX(-1) scale(1.1) translateX(15px) rotate(-8deg) !important; }
+        .char-receive-impact-left { animation: none !important; transform: scale(0.95) translateX(-15px) rotate(-5deg) !important; }
+
+        /* แอนิเมชันสั่นฉุกเฉินตอนใกล้แพ้ */
+        @keyframes panicShake { 0%, 100% { transform: translate(0, 0); } 25% { transform: translate(-2px, 2px); } 75% { transform: translate(2px, -2px); } }
+        @keyframes panicShakeRight { 0%, 100% { transform: scaleX(-1) translate(0, 0); } 25% { transform: scaleX(-1) translate(-2px, 2px); } 75% { transform: scaleX(-1) translate(2px, -2px); } }
+        .panic-left { animation: panicShake 0.15s infinite !important; }
+        .panic-right { animation: panicShakeRight 0.15s infinite !important; }
+
+        /* ✨ 3. เอฟเฟกต์วงแสงระเบิดระลอกคลื่น (Shockwave Aura) */
+        .shockwave { position: absolute; width: 20px; height: 100%; background: transparent; pointer-events: none; z-index: 4; opacity: 0; }
+        @keyframes waveExpandLeft {
+            0% { opacity: 1; width: 10px; background: radial-gradient(circle, rgba(0,242,254,0.8) 0%, rgba(0,242,254,0) 70%); transform: scaleX(1); }
+            100% { opacity: 0; width: 300px; background: radial-gradient(circle, rgba(0,242,254,0.4) 0%, rgba(0,242,254,0) 80%); transform: scaleX(2); }
+        }
+        @keyframes waveExpandRight {
+            0% { opacity: 1; width: 10px; background: radial-gradient(circle, rgba(255,117,140,0.8) 0%, rgba(255,117,140,0) 70%); transform: scaleX(-1); }
+            100% { opacity: 0; width: 300px; background: radial-gradient(circle, rgba(255,117,140,0.4) 0%, rgba(255,117,140,0) 80%); transform: scaleX(-2); }
+        }
+        .wave-active-left { animation: waveExpandLeft 0.4s ease-out forwards; }
+        .wave-active-right { animation: waveExpandRight 0.4s ease-out forwards; }
+
+        .floating-heart { position: absolute; pointer-events: none; font-size: 2rem; animation: heartFloat 1s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; z-index: 6; }
+        @keyframes heartFloat { 0% { opacity: 0; transform: translate(-50%, 0) scale(0.5); } 30% { opacity: 1; transform: translate(-50%, -30px) scale(1.3); } 100% { opacity: 0; transform: translate(var(--x), var(--y)) scale(0.7); } }
+
+        .victory-banner { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) scale(0); background: rgba(13, 14, 21, 0.95); border: 4px solid #fff; padding: 30px 60px; border-radius: 20px; font-size: 3rem; font-weight: 900; text-align: center; z-index: 20; transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow: 0 0 50px rgba(255,255,255,0.4); white-space: nowrap; }
+        .victory-banner.show { transform: translate(-50%, -50%) scale(1); }
+
+        .control-panel { margin-top: 25px; display: flex; gap: 20px; z-index: 10; }
+        .btn-group { display: flex; flex-direction: column; gap: 8px; align-items: center; }
+        .gift-btn { padding: 8px 16px; font-size: 0.9rem; font-weight: 700; border: none; border-radius: 50px; cursor: pointer; color: white; transition: transform 0.1s; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        .gift-btn:active { transform: scale(0.92); }
+        .btn-l1 { background: #0052d4; } .btn-l2 { background: #4364f7; } .btn-l3 { background: #00f2fe; color: #000; font-weight: 900; }
+        .btn-r1 { background: #962666; } .btn-r2 { background: #ec008c; } .btn-r3 { background: #ff758c; color: #000; font-weight: 900; }
+    </style>
+</head>
+<body>
+
+    <div class="scoreboard">
+        <div class="win-box win-left">
+            <span id="label-win-left">LEFT WINS</span>
+            <div class="win-counter" id="wins-left">0</div>
+        </div>
+        <div class="win-box win-right">
+            <span id="label-win-right">RIGHT WINS</span>
+            <div class="win-counter" id="wins-right">0</div>
+        </div>
+    </div>
+
+    <div class="battle-arena">
+        <div class="victory-banner" id="victory-banner">WIN!</div>
+
+        <div class="shockwave" id="shockwave-fx"></div>
+
+        <div class="team-side side-left" id="side-left">
+            <div class="team-title" id="title-left">LEFT 🧑</div>
+            <div class="score-display" id="score-left">500</div>
+            <div style="font-size:0.9rem; color:#00f2fe; opacity:0.7">Target: 1000</div>
+        </div>
+
+        <div class="push-center-axis" id="center-axis">
+            <div class="character-container">
+                <img class="cartoon-char char-left" id="avatar-left" src="" alt="Left Character">
+                <img class="cartoon-char char-right" id="avatar-right" src="" alt="Right Character">
+            </div>
+        </div>
+
+        <div class="team-side side-right" id="side-right">
+            <div class="team-title" id="title-right">RIGHT 👩</div>
+            <div class="score-display" id="score-right">500</div>
+            <div style="font-size:0.9rem; color:#ff758c; opacity:0.7">Target: 1000</div>
+        </div>
+    </div>
+
+    <div class="control-panel">
+        <div class="btn-group">
+            <button class="gift-btn btn-l1" id="btn-l1-label" onclick="addScore('left', 10)">🌹 Tier 1 (+10)</button>
+            <button class="gift-btn btn-l2" id="btn-l2-label" onclick="addScore('left', 100)">🎮 Tier 2 (+100)</button>
+            <button class="gift-btn btn-l3" id="btn-l3-label" onclick="addScore('left', 1000)">🚀 Tier 3 (+1000)</button>
+        </div>
+        <div style="align-self: center; color: #566573; font-size: 0.85rem; text-align:center;">
+            <strong>TEST KEYS:</strong><br>Left: 1, 2, 3 | Right: 8, 9, 0
+        </div>
+        <div class="btn-group">
+            <button class="gift-btn btn-r1" id="btn-r1-label" onclick="addScore('right', 10)">🍩 Tier 1 (+10)</button>
+            <button class="gift-btn btn-r2" id="btn-r2-label" onclick="addScore('right', 100)">👑 Tier 2 (+100)</button>
+            <button class="gift-btn btn-r3" id="btn-r3-label" onclick="addScore('right', 1000)">🏰 Tier 3 (+1000)</button>
+        </div>
+    </div>
+
+    <script>
+        // =================================================================
+        // ⚙️ CONFIGURATION ZONE (ส่วนสำหรับให้คุณแก้ไขรูป คำ และเสียงเองได้อิสระ)
+        // =================================================================
+        const CONFIG = {
+            imageLeft: "https://img5.pic.in.th/file/secure-sv1/boy-char.png", 
+            imageRight: "https://img5.pic.in.th/file/secure-sv1/girl-char.png",
+
+            textLeftTitle: "BOYS ♂",
+            textRightTitle: "GIRLS ♀",
+            textLeftWinsLabel: "BOYS WINS",
+            textRightWinsLabel: "GIRLS WINS",
+            
+            btnLeft1: "🌹 Rose (+10)",
+            btnLeft2: "🎮 Game (+100)",
+            btnLeft3: "🚀 Rocket (+1000)",
+            btnRight1: "🍩 Donut (+10)",
+            btnRight2: "👑 Crown (+100)",
+            btnRight3: "🏰 Castle (+1000)",
+
+            soundTier10: "https://www.soundjay.com/buttons/sounds/button-16.mp3", 
+            soundTier100: "https://www.soundjay.com/buttons/sounds/button-3.mp3",
+            soundTier1000: "https://www.soundjay.com/arcade/sounds/laser-weapon-1.mp3",
+            soundVictory: "https://www.soundjay.com/human/sounds/applause-01.mp3"
+        };
+        // =================================================================
+
+        document.getElementById('avatar-left').src = CONFIG.imageLeft || "https://via.placeholder.com/140/00f2fe/ffffff?text=BOY";
+        document.getElementById('avatar-right').src = CONFIG.imageRight || "https://via.placeholder.com/140/ff758c/ffffff?text=GIRL";
+        document.getElementById('title-left').innerText = CONFIG.textLeftTitle;
+        document.getElementById('title-right').innerText = CONFIG.textRightTitle;
+        document.getElementById('label-win-left').innerText = CONFIG.textLeftWinsLabel;
+        document.getElementById('label-win-right').innerText = CONFIG.textRightWinsLabel;
+        document.getElementById('btn-l1-label').innerText = CONFIG.btnLeft1;
+        document.getElementById('btn-l2-label').innerText = CONFIG.btnLeft2;
+        document.getElementById('btn-l3-label').innerText = CONFIG.btnLeft3;
+        document.getElementById('btn-r1-label').innerText = CONFIG.btnRight1;
+        document.getElementById('btn-r2-label').innerText = CONFIG.btnRight2;
+        document.getElementById('btn-r3-label').innerText = CONFIG.btnRight3;
+
+        function playCustomSound(type) {
+            let url = "";
+            if (type === 10) url = CONFIG.soundTier10;
+            else if (type === 100) url = CONFIG.soundTier100;
+            else if (type === 1000) url = CONFIG.soundTier1000;
+            else if (type === 'victory') url = CONFIG.soundVictory;
+
+            if (url !== "") {
+                const audio = new Audio(url);
+                audio.volume = 0.4;
+                audio.play().catch(e => console.log("Audio play blocked"));
+            }
+        }
+
+        let leftScore = 500; let rightScore = 500;
+        let leftWins = 0; let rightWins = 0;
+        let isRoundActive = true;
+
+        const sideLeft = document.getElementById('side-left'); const sideRight = document.getElementById('side-right');
+        const scoreLeftEl = document.getElementById('score-left'); const scoreRightEl = document.getElementById('score-right');
+        const centerAxis = document.getElementById('center-axis');
+        const avatarLeft = document.getElementById('avatar-left'); const avatarRight = document.getElementById('avatar-right');
+        const victoryBanner = document.getElementById('victory-banner');
+        const shockwaveFx = document.getElementById('shockwave-fx');
+
+        function updateGameLayout() {
+            scoreLeftEl.innerText = leftScore; scoreRightEl.innerText = rightScore;
+            let total = leftScore + rightScore;
+            let leftPercent = (leftScore / total) * 100;
+            
+            sideLeft.style.flex = leftPercent;
+            sideRight.style.flex = 100 - leftPercent;
+            centerAxis.style.left = `${leftPercent}%`;
+            shockwaveFx.style.left = `${leftPercent}%`;
+
+            if (leftScore < 200) avatarLeft.classList.add('panic-left'); else avatarLeft.classList.remove('panic-left');
+            if (rightScore < 200) avatarRight.classList.add('panic-right'); else avatarRight.classList.remove('panic-right');
+
+            if (isRoundActive) {
+                if (leftScore >= 1000) endRound('left');
+                else if (rightScore >= 1000) endRound('right');
+            }
+        }
+
+        function triggerPushVisuals(attacker) {
+            // ล้างเอฟเฟกต์เก่าของระเบิดแสงออกก่อน
+            shockwaveFx.classList.remove('wave-active-left', 'wave-active-right');
+            void shockwaveFx.offsetWidth; // บังคับให้เบราว์เซอร์รีเซ็ตสถานะแอนิเมชัน
+
+            if (attacker === 'left') {
+                // ทำท่าดัน และ เอฟเฟกต์วงแสงสีฟ้า
+                avatarLeft.classList.add('char-push-action');
+                avatarRight.classList.add('char-receive-impact');
+                shockwaveFx.classList.add('wave-active-left');
+            } else {
+                // ทำท่าดัน และ เอฟเฟกต์วงแสงสีชมพู
+                avatarRight.classList.add('char-push-action-right');
+                avatarLeft.classList.add('char-receive-impact-left');
+                shockwaveFx.classList.add('wave-active-right');
+            }
+
+            // เมื่อผลักเสร็จแล้วให้คลายท่ากลับมาเป็นท่าดั้งเดิมเพื่อขยับต่อเนื่อง
+            setTimeout(() => {
+                avatarLeft.classList.remove('char-push-action', 'char-receive-impact-left');
+                avatarRight.classList.remove('char-push-action-right', 'char-receive-impact');
+            }, 250);
+        }
+
+        function addScore(team, amount) {
+            if (!isRoundActive) return;
+            playCustomSound(amount);
+            triggerPushVisuals(team);
+
+            if (team === 'left') {
+                leftScore += amount; rightScore = Math.max(0, rightScore - amount);
+                popHeart('#00f2fe');
+            } else {
+                rightScore += amount; leftScore = Math.max(0, leftScore - amount);
+                popHeart('#ff758c');
+            }
+            updateGameLayout();
+        }
+
+        function popHeart(color) {
+            const heart = document.createElement('div');
+            heart.className = 'floating-heart'; heart.innerHTML = '❤️'; heart.style.color = color;
+            const moveX = `${(Math.random() - 0.5) * 160}px`; const moveY = `-${Math.random() * 150 + 80}px`;
+            heart.style.setProperty('--x', moveX); heart.style.setProperty('--y', moveY);
+            centerAxis.appendChild(heart);
+            setTimeout(() => heart.remove(), 1000);
+        }
+
+        function endRound(winner) {
+            isRoundActive = false;
+            playCustomSound('victory');
+            if (winner === 'left') {
+                leftWins++; document.getElementById('wins-left').innerText = leftWins;
+                victoryBanner.innerText = `${CONFIG.textLeftTitle} WIN! 🏆`;
+                victoryBanner.style.color = "#00f2fe"; victoryBanner.style.borderColor = "#00f2fe";
+            } else {
+                rightWins++; document.getElementById('wins-right').innerText = rightWins;
+                victoryBanner.innerText = `${CONFIG.textRightTitle} WIN! 🏆`;
+                victoryBanner.style.color = "#ff758c"; victoryBanner.style.borderColor = "#ff758c";
+            }
+            victoryBanner.classList.add('show');
+            setTimeout(() => {
+                leftScore = 500; rightScore = 500;
+                victoryBanner.classList.remove('show');
+                avatarLeft.className = "cartoon-char char-left";
+                avatarRight.className = "cartoon-char char-right";
+                isRoundActive = true; updateGameLayout();
+            }, 3000);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === '1') addScore('left', 10); if (e.key === '2') addScore('left', 100); if (e.key === '3') addScore('left', 1000);
+            if (e.key === '8') addScore('right', 10); if (e.key === '9') addScore('right', 100); if (e.key === '0') addScore('right', 1000);
+        });
+
+        updateGameLayout();
+    </script>
+</body>
+</html>
